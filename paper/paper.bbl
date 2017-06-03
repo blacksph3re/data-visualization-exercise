@@ -1,0 +1,23 @@
+\begin{thebibliography}{1}
+
+\bibitem{Tanenbaum}
+Andrew~S. Tanenbaum and Maarten~van Steen.
+\newblock {\em Distributed Systems: Principles and Paradigms (2Nd Edition)}.
+\newblock Prentice-Hall, Inc., Upper Saddle River, NJ, USA, 2006.
+
+\bibitem{MPI}
+{MS Windows NT} kernel description.
+\newblock \url{https://www.open-mpi.org/}.
+\newblock Accessed: 2017-06-02.
+
+\bibitem{martinfowler2014microservices}
+Microservices.
+\newblock \url{http://martinfowler.com/articles/microservices.html}.
+\newblock Accessed: 2017-06-03.
+
+\bibitem{OMS}
+Open membership system, design documentation.
+\newblock \url{https://oms-project.atlassian.net/wiki/display/GENERAL/Design/}.
+\newblock Accessed: 2017-06-03.
+
+\end{thebibliography}

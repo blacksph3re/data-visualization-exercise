@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+  <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
+</head>
+<body>
+
+<div class="container">
+  <div id="vis"></div>
+
+
+  <div ng-app="TrafficSim">
+    <div ng-controller="TrafficSimController">
+      <div class="pull-left">
+        <div ng-repeat="node in nodes">
+          {{ node.name }} 
+          <button type="button" class="btn btn-default" ng-click="editNode(node);"><i class="fa fa-pencil"></i>Edit</button>
+          <button type="button" class="btn btn-default" ng-click="deleteNode($index);"><i class="fa fa-close"></i>Delete</button>
+          <button type="button" class="btn btn-default" ng-click="duplicateNode(node);"><i class="fa fa-plus"></i>Duplicate</button>
+        </div>
+
+        <div>
+          <button type="button" class="btn btn-default" ng-click="addNode();">Add</button>
+          <button type="button" class="btn btn-default" ng-click="toggleRunning()">Start/Stop</button>
+          <button type="button" class="btn btn-default" ng-click="reset()">Reset</button>
+          <button type="button" class="btn btn-default" ng-click="randomSetup()">Random Setup</button>
+        </div>
+      </div>
+      <div class="pull-right" ng-show="editnode" style="padding: 10px 10px 10px 10px;">
+        <h4>Editing {{ editnode.name }}</h4>
+        <div class="form-group">
+          <label for="name">Name</label>
+          <input type="text" class="form-control" ng-model="editnode.name">
+        </div>
+        <div class="form-group">
+          <label for="ip">IP</label>
+          <input type="text" class="form-control" ng-model="editnode.ip">
+        </div>
+        <div class="form-group">
+          <label for="ip">Position.x</label>
+          <input type="number" class="form-control" ng-model="editnode.position.x">
+        </div>
+        <div class="form-group">
+          <label for="ip">Position.y</label>
+          <input type="number" class="form-control" ng-model="editnode.position.y">
+        </div>
+      </div>
+      <div class="pull-right" ng-show="editnode" style="padding: 10px 10px 10px 10px;">
+        <h4>Connections of {{ editnode.name }}</h4>
+        <div class="form-group" ng-repeat="n in editnode.internal_requests">
+          <label for="name">{{ n.addr.name }}</label>
+          <input type="number" class="form-control" ng-model="n.volume">
+          <input type="number" class="form-control" ng-model="n.latency">
+          <button type="button" class="btn btn-default" ng-click="deleteConnection($index)"><i class="fa fa-minus"></i>Remove connection</button>
+        </div>
+        <div class="form-group">
+          <select class="form-control" ng-model="selectedconnection" ng-options="c.name for c in getSelectableConnections()">
+          </select>
+          <button type="button" class="btn btn-default" ng-click="addConnection(selectedconnection);"><i class="fa fa-plus"></i>Add Connection</button><br>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://d3js.org/d3.v4.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js" integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=" crossorigin="anonymous"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/angular.js/1.6.1/angular.min.js" integrity="sha256-3SrLjPeRPa1ofM280r+OMcUjJZKLWJHr6SRtRu3dRb0=" crossorigin="anonymous"></script>
+<script src="vec2.js"></script>
+<script>
+var nodes = [];
+var boids = [];
+var framerate = 60;
+var boidSpeed = 5;
+var boidColors = {
+  req: {r: 10, g: 200, b: 10},
+  internal: {r: 10, g: 10, b: 200}
+};
+var numBoids = 300;
+var numNodes = 6;
+var width = 1200;
+var height = 700;
+var running = true;
+var base = d3.select("#vis");
+var chart = base.append("canvas")
+  .attr("width", width)
+  .attr("height", height);
+var context = chart.node().getContext("2d");
+var nodesize = d3.scaleLinear().domain([0, 150])
+    .range([2, 20])
+    .clamp(true);
+
+var randomIpSegment = function() {
+  return "" + (Math.floor(Math.random()*255));
+}
+
+var randomNode = function() {
+  return {
+    position: new Vec2(Math.random() * width, Math.random() * height),
+    ip: randomIpSegment() + "." + randomIpSegment() + "." + randomIpSegment() + "." + randomIpSegment(),
+    name: "Unnamed node",
+    incoming_requests: Math.random() * 200,
+    internal_requests: []
+  }
+}
+
+var randomBoid = function(color) {
+  var idx = Math.floor(Math.random()*nodes.length)
+  var from = nodes[idx];
+  idx = (idx + Math.floor(Math.random()*(nodes.length-2)) + 1) % nodes.length;
+  var to = nodes[idx];
+  return {
+    position: from.position.clone(),
+    from: from.position.clone(),
+    to: to.position.clone(),
+    movement: to.position.clone().subtract(from.position).scaleTo(boidSpeed/framerate),
+    color: color
+  }
+}
+
+var randomSetup = function() {
+  nodes = d3.range(numNodes).map(randomNode);
+  boids = [];
+
+  // Create a random division of requests (forwards)
+  nodes.forEach(function(n, i) {
+    n = nodes[i];
+    nodes.forEach(function(refnode) {
+      if(refnode.ip == n.ip)
+        return;
+
+      n.internal_requests.push({
+        addr: refnode,
+        volume: Math.random()*10,
+        latency: Math.random()*9+2
+      });
+    });
+  });
+}
+
+var reset = function() {
+  nodes = [];
+  boids = [];
+}
+
+
+
+var renderBoid = function(b) {
+  var alpha = d3.scaleLinear()
+    .domain([0, b.from.distanceToSquared(b.to)])
+    .range([-1, 1]);
+
+  context.beginPath();
+  context.fillStyle = d3.rgb(b.color.r, b.color.g, b.color.b, -Math.pow(alpha(b.from.distanceToSquared(b.position)), 4) + 1);
+  context.arc(b.position.x, b.position.y, 3, 0, 2 * Math.PI);
+  context.fill();
+}
+
+var updateBoid = function(i) {
+  var b = boids[i];
+  b.position.add(b.movement);
+
+  // Check if the boid has passed his destination, if yes create a new one
+  if(b.from.distanceToSquared(b.to) < b.from.distanceToSquared(b.position) ||
+    b.position.x > width || b.position.x < 0 || b.position.y > height || b.position.y < 0) {
+    boids.splice(i, 1);
+  }
+}
+
+var getTotalThroughput = function(node) {
+  var retval =0;
+  node.internal_requests.forEach(function(r) {
+    retval += r.volume;
+  });
+
+  nodes.forEach(function(n) {
+    var tmp = n.internal_requests.find(function(r) {return r.addr.ip == node.ip});
+    if(tmp)
+      retval += tmp.volume;
+  });
+
+  return nodesize(retval);
+}
+
+var renderNode = function(n) {
+  context.beginPath();
+  context.fillStyle = "red";
+  context.arc(n.position.x, n.position.y, getTotalThroughput(n), 0, 2 * Math.PI);
+  context.fill();
+  context.fillStyle = "black";
+  context.textAlign="center"; 
+  context.fillText(n.name,n.position.x,n.position.y-10);
+}
+
+var updateNode = function(i) {
+  var n = nodes[i];
+  n.internal_requests.forEach(function(item) {
+    if(item.addr.ip == n.ip)
+      return;
+
+    var prob = Math.min(item.volume / framerate, 1);
+    if(Math.random() >= (1.0 - prob)) {
+      boids.push({
+        position: n.position.clone(),
+        from: n.position.clone(),
+        to: item.addr.position.clone(),
+        movement: item.addr.position.clone().subtract(n.position).scaleTo(20/item.latency),
+        color: boidColors.internal
+      });
+    }
+  });
+}
+
+
+var tick = function() {
+  context.fillStyle = "rgba(255, 255, 255, " + 0.6 + ")";
+  context.fillRect(0, 0, width, height);
+
+  boids.forEach(function(b, i) {
+    renderBoid(b);
+    updateBoid(i);
+  });
+  nodes.forEach(function(n, i) {
+    renderNode(n);
+    updateNode(i);
+  });
+  if(running)
+    requestAnimationFrame(tick);
+}
+
+
+
+reset();
+requestAnimationFrame(tick);
+
+angular.module('TrafficSim', [])
+ .controller('TrafficSimController', function($scope) {
+
+   $scope.toggleRunning = function() {
+    running = !running;
+    if(running)
+      requestAnimationFrame(tick);
+   }
+
+   $scope.editNode = function(node) {
+    $scope.editnode = node;
+   }
+
+   $scope.deleteNode = function(index) {
+    var oldnode = nodes[index];
+    nodes.splice(index, 1);
+    nodes.forEach(function(n, i) {
+      nodes[i].internal_requests = nodes[i].internal_requests.filter(function(x) {
+        return x.addr.ip != oldnode.ip;
+      });
+    });
+    $scope.editnode = undefined;
+   }
+
+   $scope.duplicateNode = function(node) {
+    var newnode = {
+      name: node.name,
+      ip: randomIpSegment() + "." + randomIpSegment() + "." + randomIpSegment() + "." + randomIpSegment(),
+      position: new Vec2(Math.random() * width, Math.random() * height),
+      internal_requests: node.internal_requests.map(function(r) { return Object.assign({}, r);})
+    };
+    nodes.push(newnode);
+   }
+
+   $scope.addNode = function() {
+    var n = randomNode();
+    nodes.push(n);
+    $scope.editnode = n;
+   }
+
+   $scope.addConnection = function(node) {
+    $scope.editnode.internal_requests.push({
+      volume: 0,
+      latency: boidSpeed,
+      addr: node
+    });
+   }
+
+   $scope.deleteConnection = function(index) {
+    $scope.editnode.internal_requests.splice(index, 1);
+   }
+
+   $scope.getSelectableConnections = function() {
+    var arr = [];
+    if(!$scope.editnode)
+      return arr;
+
+    nodes.forEach(function(n) {
+      if(n.ip != $scope.editnode.ip && !$scope.editnode.internal_requests.find(function(item) {return item.ip == n.ip;}))
+        arr.push(n);
+    });
+
+    console.log(arr);
+    return arr;
+   }
+
+   $scope.reset = function() {
+    reset();
+    $scope.nodes = nodes;
+    $scope.editnode = undefined;
+   }
+
+   $scope.randomSetup = function() {
+    randomSetup();
+    $scope.nodes = nodes;
+    $scope.editnode = undefined;
+   }
+
+   $scope.reset();
+});
+</script>
