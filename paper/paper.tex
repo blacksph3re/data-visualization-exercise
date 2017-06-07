@@ -53,6 +53,7 @@ To facilitate all these, we offer an intuitive GUI with a modern look, that make
 
 We evaluated our system to represent the distributed architecture of the OMS \cite{OMS}, a membership management system developed by the NGO AEGEE. We found our solution perfectly capable to represent the architecture and connections, but manually creating all connections posed a burden which limits the usability of our system. Thus we researched possibilities to automatically reflect a structure without the developer interferring and found a solution to monitor a docker-based architecture by injecting tcpdump packet captures into each container, forwarding those captured packets to an analyzing monitor which then sets the parameters in the visualization solution. However, this is limited to docker-based architectures only and to not loose generality we decided to not implement this feature. It can be added in case this used in a real world scenario though.
 
+Also we noted a performance drop when visualizing large amounts of nodes. To overcome this, we could add an alternative visualisation which uses bands between the nodes in different widths and colors to visualize the network traffic. The solution as it is however is suited to visualize small to medium size problems. A large-scale visualisation would require the automated data-capturing and analyzing as the effort to manually add all nodes increases by size.
 \bibliographystyle{unsrt}
 \bibliography{paper}
 

@@ -129,7 +129,7 @@ var randomSetup = function() {
   nodes.forEach(function(n, i) {
     n = nodes[i];
     nodes.forEach(function(refnode) {
-      if(refnode.ip == n.ip)
+      if(refnode.ip == n.ip || Math.random() > 0.5)
         return;
 
       n.internal_requests.push({
@@ -218,6 +218,8 @@ var updateNode = function(i) {
 var tick = function() {
   context.fillStyle = "rgba(255, 255, 255, " + 0.6 + ")";
   context.fillRect(0, 0, width, height);
+
+  //console.log(boids.length);
 
   boids.forEach(function(b, i) {
     renderBoid(b);
